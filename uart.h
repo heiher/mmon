@@ -19,7 +19,11 @@
    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#if defined(__mips64)
+#define UART_BASE       0xFFFFFFFFB40003f8
+#else
 #define UART_BASE       0xB40003f8
+#endif
 #define UART_DATA       0x0
 #define UART_DLL        0x0
 #define UART_DLM        0x1

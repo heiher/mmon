@@ -20,17 +20,11 @@
  */
 
 #include "mips.h"
-
-#ifdef SIM
-#define UART_BASE	0xbfcc0000
-#define UART_DATA       0
-#define UART_SR         4
-#else
 #include "uart.h"
+
 uart_clk = 18432000/16
 uart_bps = 115200
 uart_divisor = uart_clk/uart_bps
-#endif
 
 	.data
 
@@ -46,13 +40,21 @@ inbuf:		.space	256
 
         .text
 
-#ifndef SIM
-
-PBC_BASE   = 0xBE000000
-PBC_IOBASE = 0x6c
-K_1BASE    = 0xA0000000
-
+#if defined(__mips64)
+RAM_BASE   = 0xffffffffa0000000
+PBC_BASE   = 0xffffffffbe000000
+K_1BASE    = 0xffffffffa0000000
+flash_base = 0xffffffffbfc00000
+#else
+RAM_BASE   = 0xa0000000
+PBC_BASE   = 0xbe000000
+K_1BASE    = 0xa0000000
 flash_base = 0xbfc00000
+#endif
+
+RAM_SIZE   = 0x400000		# 4M
+PBC_IOBASE = 0x6c
+
 flash_sector_size = 0x10000 << 2
 flash_sector_count = 8
 
@@ -71,16 +73,6 @@ flash_cmd3_erase_chip   = 0x10101010
 flash_cmd3_erase_sector = 0x30303030
 
 flash_prot_mask = 0x01010101
-
-#endif
-
-#ifdef SIM
-RAM_BASE   = 0x80000000
-RAM_SIZE   = 0x100000		# 1M
-#else
-RAM_BASE   = 0xa0000000
-RAM_SIZE   = 0x400000		# 4M
-#endif
 
 STACK_INIT = RAM_BASE+RAM_SIZE-4
 
@@ -129,9 +121,9 @@ reset_exception:
 	.word	print
 	.org	0x538
 	.word	reg_cpu_isr
-	.word	unred_cpu_isr
+	.word	unreg_cpu_isr
 	.word	reg_ic_isr
-	.word	unred_ic_isr
+	.word	unreg_ic_isr
 	.word	reg_esr
 	.word	unreg_esr
 	.org	0x550
@@ -169,7 +161,7 @@ __start:
  *  set up stack
  */
 
-	la	sp,STACK_INIT
+	LA	sp,STACK_INIT
 
           
 /*
@@ -177,15 +169,13 @@ __start:
  */
 
 /*
-#ifndef SIM
-        la      t3, PBC_BASE            # Set up V961PBC base address
-	li	t4,K_1BASE
-	sub	t4,t3,t4		# Get PBC physical address
-        sw      t4,PBC_IOBASE(t3)       # Write PBC Base address       
+        LA      t3, PBC_BASE            # Set up V961PBC base address
+	li	ta0,K_1BASE
+	sub	ta0,t3,ta0		# Get PBC physical address
+        sw      ta0,PBC_IOBASE(t3)       # Write PBC Base address
         nop
         nop
         nop
-#endif        
 */
 
 
@@ -193,8 +183,7 @@ __start:
   * Initialize UART baud rate, set to N,8,2
   */
   
-#ifndef SIM
-        la      t0,UART_BASE
+        LA      t0,UART_BASE
 
         li      t1,UART_MCR_ON_1	# turn on LED
         sb      t1,UART_MCR(t0)
@@ -209,10 +198,9 @@ __start:
 
         li      t1,UART_LCR_W           # DLAB off
         sb      t1,UART_LCR(t0)         # Write it out
-#endif
 
 
-	la	a0,banner		# write our banner
+	LA	a0,banner		# write our banner
 	jal	outstr
 	nop
 
@@ -231,7 +219,7 @@ main:	li	a0,'>'
 	jal	skip_ws
 	nop
 
-	la	t0,inbufptr		# get input buffer pointer in t1
+	LA	t0,inbufptr		# get input buffer pointer in t1
 	lw	t1,0(t0)
 	nop
 
@@ -286,7 +274,7 @@ badcmd:	li	a0,'?'
  */
 
 help_cmd:
-	la	a0,help_msg
+	LA	a0,help_msg
 	jal	outstr
 	nop
 
@@ -305,7 +293,7 @@ help_cmd:
  */
 
 load_cmd:
-	la	a0,load_msg
+	LA	a0,load_msg
 	jal	outstr
 	nop
 
@@ -337,8 +325,8 @@ find_s:	li	s3,0			# init checksum
 
 load_s3:
 # get length into s1 - must be at least 5
-	la	a0,load_bad_digit	# get length - must be 5
-	la	a1,load_int
+	LA	a0,load_bad_digit	# get length - must be 5
+	LA	a1,load_int
 	jal	inbyte
 	nop
 	blt	v0,5,load_bad_len
@@ -389,8 +377,8 @@ load_byte:
 
 
 load_s7:
-	la	a0,load_bad_digit	# get length - must be 5
-	la	a1,load_int
+	LA	a0,load_bad_digit	# get length - must be 5
+	LA	a1,load_int
 	jal	inbyte
 	nop
 	bne	v0,5,load_bad_len
@@ -413,7 +401,7 @@ load_s7:
 	sll	s2,s2,8
 	or	s2,s2,v0
 
-	la	v0,go_addr		# save for go command
+	LA	v0,go_addr		# save for go command
 	sw	s2,0(v0)
 
 # get checksum
@@ -431,7 +419,7 @@ load_s7:
 
 
 load_bad_digit:
-	la	a0,load_bad_digit_msg
+	LA	a0,load_bad_digit_msg
 	jal	outstr
 	nop
 
@@ -439,7 +427,7 @@ load_bad_digit:
 	nop
 	
 load_bad_len:
-	la	a0,load_bad_len_msg
+	LA	a0,load_bad_len_msg
 	jal	outstr
 	nop
 
@@ -447,7 +435,7 @@ load_bad_len:
 	nop
 	
 load_bad_srec:
-	la	a0,load_bad_srec_msg
+	LA	a0,load_bad_srec_msg
 	jal	outstr
 	nop
 
@@ -455,7 +443,7 @@ load_bad_srec:
 	nop
 	
 load_bad_cksm:
-	la	a0,load_bad_cksm_msg
+	LA	a0,load_bad_cksm_msg
 	jal	outstr
 	nop
 
@@ -463,7 +451,7 @@ load_bad_cksm:
 	nop
 	
 load_int:
-	la	a0,load_int_msg
+	LA	a0,load_int_msg
 	jal	outstr
 	nop
 	
@@ -565,7 +553,7 @@ go_cmd:
 	jal	skip_ws
 	nop
 
-	la	t0,inbufptr		# get input buffer pointer in t1
+	LA	t0,inbufptr		# get input buffer pointer in t1
 	lw	t1,0(t0)
 	nop
 
@@ -578,10 +566,10 @@ go_cmd:
 	jal	parse_hex		# get address from command line
 	nop
 
-	la	t3,go_addr		# save address
+	LA	t3,go_addr		# save address
 	sw	v0,0(t3)
 
-go_now:	la	t3,go_addr		# get address
+go_now:	LA	t3,go_addr		# get address
 	lw	v0,0(t3)
 	nop
 
@@ -633,7 +621,7 @@ d_cmd_1:
 	li	a1,64			# default to dumping 64 bytes
 	add	a1,a1,a0
 
-	la	t0,inbufptr		# get input buffer pointer in t1
+	LA	t0,inbufptr		# get input buffer pointer in t1
 	lw	t1,0(t0)
 	nop
 
@@ -672,7 +660,6 @@ fill_cmd:
 	beq	t2,'w',fw_cmd
 	nop
 
-#ifndef SIM
 	beq	t2,'i',flash_id_cmd
 	nop
 
@@ -681,7 +668,6 @@ fill_cmd:
 
 	beq	t2,'p',flash_program_cmd
 	nop
-#endif
 
 	j	badcmd
 	nop
@@ -801,7 +787,7 @@ sb_cmd:
 sb0:	jal	skip_ws			# get data in s1
 	nop
 
-	la	t0,inbufptr		# get input buffer pointer in t1
+	LA	t0,inbufptr		# get input buffer pointer in t1
 	lw	t1,0(t0)
 	nop
 
@@ -832,7 +818,7 @@ sh_cmd:
 sh0:	jal	skip_ws			# get data in s1
 	nop
 
-	la	t0,inbufptr		# get input buffer pointer in t1
+	LA	t0,inbufptr		# get input buffer pointer in t1
 	lw	t1,0(t0)
 	nop
 
@@ -875,7 +861,7 @@ sw_cmd:
 sw0:	jal	skip_ws			# get data in s1
 	nop
 
-	la	t0,inbufptr		# get input buffer pointer in t1
+	LA	t0,inbufptr		# get input buffer pointer in t1
 	lw	t1,0(t0)
 	nop
 
@@ -932,21 +918,19 @@ swr_cmd:
 	nop
 
 
-#ifndef SIM
-
 flash_id_cmd:
 	jal	copy_flash_code_to_ram
 	nop
 
-	la	a0,flash_read_id
-	la	a1,flash_code_begin
+	LA	a0,flash_read_id
+	LA	a1,flash_code_begin
 	subu	a0,a0,a1
-	la	a1,play_area
+	LA	a1,play_area
 	addu	a0,a0,a1
 	jal	a0
 	nop
 
-	la	a0,manuf_msg
+	LA	a0,manuf_msg
 	jal	outstr
 	nop
 
@@ -954,7 +938,7 @@ flash_id_cmd:
 	jal	outhexw
 	nop
 
-	la	a0,dev_msg
+	LA	a0,dev_msg
 	jal	outstr
 	nop
 
@@ -962,15 +946,15 @@ flash_id_cmd:
 	jal	outhexw
 	nop
 
-	la	a0,flash_read_prot
-	la	a1,flash_code_begin
+	LA	a0,flash_read_prot
+	LA	a1,flash_code_begin
 	subu	a0,a0,a1
-	la	a1,play_area
+	LA	a1,play_area
 	addu	a0,a0,a1
 	jal	a0
 	nop
 
-	la	a0,sect_prot_msg
+	LA	a0,sect_prot_msg
 	jal	outstr
 	nop
 
@@ -978,7 +962,7 @@ flash_id_cmd:
 	jal	outhexw
 	nop
 
-	la	a0,crlf_msg
+	LA	a0,crlf_msg
 	jal	outstr
 	nop
 
@@ -990,10 +974,10 @@ flash_erase_cmd:
 	jal	copy_flash_code_to_ram
 	nop
 
-	la	a0,flash_erase_sector
-	la	a1,flash_code_begin
+	LA	a0,flash_erase_sector
+	LA	a1,flash_code_begin
 	subu	a0,a0,a1
-	la	a1,play_area
+	LA	a1,play_area
 	addu	a0,a0,a1
 	jal	a0
 	nop
@@ -1018,10 +1002,10 @@ flash_program_cmd:
 	nop
 	move	a1,v0
 
-	la	t0,flash_program_word
-	la	t1,flash_code_begin
+	LA	t0,flash_program_word
+	LA	t1,flash_code_begin
 	subu	t0,t0,t1
-	la	t1,play_area
+	LA	t1,play_area
 	addu	t0,t0,t1
 	jal	t0
 	nop
@@ -1031,9 +1015,9 @@ flash_program_cmd:
 
 
 copy_flash_code_to_ram:
-	la	t0,flash_code_begin
-	la	t1,flash_code_end
-	la	t2,play_area
+	LA	t0,flash_code_begin
+	LA	t1,flash_code_end
+	LA	t2,play_area
 	
 cfl:	lw	t3,0(t0)
 	addi	t0,t0,4
@@ -1055,31 +1039,31 @@ flash_code_begin:
  *   v1: device
  */
 flash_read_id:
-	la	t0,flash_cmd1_addr	# unlock
+	LA	t0,flash_cmd1_addr	# unlock
 	li	t1,flash_cmd1_data
 	sw	t1,0(t0)
 
-	la	t0,flash_cmd2_addr
+	LA	t0,flash_cmd2_addr
 	li	t1,flash_cmd2_data
 	sw	t1,0(t0)
 
-	la	t0,flash_cmd3_addr	# auto-id
+	LA	t0,flash_cmd3_addr	# auto-id
 	li	t1,flash_cmd3_autosel
 	sw	t1,0(t0)
 
-	la	t0,flash_base		# read manuf. and device
+	LA	t0,flash_base		# read manuf. and device
 	lw	v0,0(t0)
 	lw	v1,4(t0)
 
-	la	t0,flash_cmd1_addr	# unlock
+	LA	t0,flash_cmd1_addr	# unlock
 	li	t1,flash_cmd1_data
 	sw	t1,0(t0)
 
-	la	t0,flash_cmd2_addr
+	LA	t0,flash_cmd2_addr
 	li	t1,flash_cmd2_data
 	sw	t1,0(t0)
 
-	la	t0,flash_cmd3_addr	# reset
+	LA	t0,flash_cmd3_addr	# reset
 	li	t1,flash_cmd3_reset
 	sw	t1,0(t0)
 
@@ -1092,44 +1076,44 @@ flash_read_id:
  *   v0: sector protection mask
  */
 flash_read_prot:
-	la	t0,flash_cmd1_addr	# unlock
+	LA	t0,flash_cmd1_addr	# unlock
 	li	t1,flash_cmd1_data
 	sw	t1,0(t0)
 
-	la	t0,flash_cmd2_addr
+	LA	t0,flash_cmd2_addr
 	li	t1,flash_cmd2_data
 	sw	t1,0(t0)
 
-	la	t0,flash_cmd3_addr	# auto-id
+	LA	t0,flash_cmd3_addr	# auto-id
 	li	t1,flash_cmd3_autosel
 	sw	t1,0(t0)
 
 	li	v0,0			# read sector protection
 	li	t2,flash_prot_mask
 	li	t3,flash_sector_size
-	li	t4,flash_sector_count
+	li	ta0,flash_sector_count
 
-fidl:	lw	t5,8(t0)		# get protection bits for one sector
+fidl:	lw	ta1,8(t0)		# get protection bits for one sector
 	nop
-	and	t5,t5,t2		# keep only low bits
+	and	ta1,ta1,t2		# keep only low bits
 
-	sll	v0,v0,1			# v0 = (v0 << 1) | t5
-	or	v0,v0,t5
+	sll	v0,v0,1			# v0 = (v0 << 1) | ta1
+	or	v0,v0,ta1
 
 	add	t0,t0,t3		# advance pointer to next sector
-	addi	t4,t4,-1		# decrement sector counter
-	bnez	t4,fidl
+	addi	ta0,ta0,-1		# decrement sector counter
+	bnez	ta0,fidl
 	nop
 
-	la	t0,flash_cmd1_addr	# unlock
+	LA	t0,flash_cmd1_addr	# unlock
 	li	t1,flash_cmd1_data
 	sw	t1,0(t0)
 
-	la	t0,flash_cmd2_addr
+	LA	t0,flash_cmd2_addr
 	li	t1,flash_cmd2_data
 	sw	t1,0(t0)
 
-	la	t0,flash_cmd3_addr	# reset
+	LA	t0,flash_cmd3_addr	# reset
 	li	t1,flash_cmd3_reset
 	sw	t1,0(t0)
 
@@ -1138,27 +1122,27 @@ fidl:	lw	t5,8(t0)		# get protection bits for one sector
 
 
 flash_erase_sector:
-	la	t0,flash_cmd1_addr	# unlock
+	LA	t0,flash_cmd1_addr	# unlock
 	li	t1,flash_cmd1_data
 	sw	t1,0(t0)
 
-	la	t0,flash_cmd2_addr
+	LA	t0,flash_cmd2_addr
 	li	t1,flash_cmd2_data
 	sw	t1,0(t0)
 
-	la	t0,flash_cmd3_addr	# erase enable
+	LA	t0,flash_cmd3_addr	# erase enable
 	li	t1,flash_cmd3_erase_en
 	sw	t1,0(t0)
 
-	la	t0,flash_cmd1_addr	# unlock
+	LA	t0,flash_cmd1_addr	# unlock
 	li	t1,flash_cmd1_data
 	sw	t1,0(t0)
 
-	la	t0,flash_cmd2_addr
+	LA	t0,flash_cmd2_addr
 	li	t1,flash_cmd2_data
 	sw	t1,0(t0)
 
-	la	t0,flash_base+flash_sector_size	# sector
+	LA	t0,flash_base+flash_sector_size	# sector
 	li	t1,flash_cmd3_erase_sector
 	sw	t1,0(t0)
 
@@ -1179,15 +1163,15 @@ fe_poll:
  *   a1: data
  */
 flash_program_word:
-	la	t0,flash_cmd1_addr	# unlock
+	LA	t0,flash_cmd1_addr	# unlock
 	li	t1,flash_cmd1_data
 	sw	t1,0(t0)
 
-	la	t0,flash_cmd2_addr
+	LA	t0,flash_cmd2_addr
 	li	t1,flash_cmd2_data
 	sw	t1,0(t0)
 
-	la	t0,flash_cmd3_addr	# program
+	LA	t0,flash_cmd3_addr	# program
 	li	t1,flash_cmd3_program
 	sw	t1,0(t0)
 
@@ -1207,8 +1191,6 @@ fw_poll:
 	nop
 
 flash_code_end:
-
-#endif
 
 
 # dump memory from a0 to a1
@@ -1297,7 +1279,7 @@ dump9:	j	s2			# return
 # uses t0,t1,t2
 
 skip_ws:
-	la	t0,inbufptr		# get input buffer pointer in t1
+	LA	t0,inbufptr		# get input buffer pointer in t1
 	lw	t1,0(t0)
 	nop
 
@@ -1325,7 +1307,7 @@ skipw1:	addi	t1,t1,1			# advance input buffer pointer
 parse_hex:
 	li	v0,0
 
-	la	t0,inbufptr		# get input buffer pointer in t1
+	LA	t0,inbufptr		# get input buffer pointer in t1
 	lw	t1,0(t0)
 	nop
 
@@ -1365,11 +1347,11 @@ notlc:	sw	t1,0(t0)		# store input buffer pointer
 
 # output a string from a0
 
-outstr:	move	t7,ra
-	move	t6,a0
+outstr:	move	ta3,ra
+	move	ta2,a0
 
-outs0:	lbu	a0,0(t6)		# get byte
-	addi	t6,t6,1
+outs0:	lbu	a0,0(ta2)		# get byte
+	addi	ta2,ta2,1
 
 	beqz	a0,outs9
 	nop
@@ -1380,7 +1362,7 @@ outs0:	lbu	a0,0(t6)		# get byte
 	j	outs0
 	nop
 
-outs9:	j	t7
+outs9:	j	ta3
 	nop
 
 
@@ -1388,39 +1370,39 @@ outs9:	j	t7
 # output a hex word from a0
 
 outhexw:
-	move	t7,ra
-	move	t6,a0
+	move	ta3,ra
+	move	ta2,a0
 
-	srl	a0,t6,28
+	srl	a0,ta2,28
 	jal	outhexd
 	nop
 
-	srl	a0,t6,24
+	srl	a0,ta2,24
 	jal	outhexd
 	nop
 
-	srl	a0,t6,20
+	srl	a0,ta2,20
 	jal	outhexd
 	nop
 
-	srl	a0,t6,16
+	srl	a0,ta2,16
 	jal	outhexd
 	nop
 
-	srl	a0,t6,12
+	srl	a0,ta2,12
 	jal	outhexd
 	nop
 
-	srl	a0,t6,8
+	srl	a0,ta2,8
 	jal	outhexd
 	nop
 
-	srl	a0,t6,4
+	srl	a0,ta2,4
 	jal	outhexd
 	nop
 
-	move	a0,t6
-	move	ra,t7
+	move	a0,ta2
+	move	ra,ta3
 
 	j	outhexd
 	nop
@@ -1429,23 +1411,23 @@ outhexw:
 # output a hex half-word from a0
 
 outhexh:
-	move	t7,ra
-	move	t6,a0
+	move	ta3,ra
+	move	ta2,a0
 
-	srl	a0,t6,12
+	srl	a0,ta2,12
 	jal	outhexd
 	nop
 
-	srl	a0,t6,8
+	srl	a0,ta2,8
 	jal	outhexd
 	nop
 
-	srl	a0,t6,4
+	srl	a0,ta2,4
 	jal	outhexd
 	nop
 
-	move	a0,t6
-	move	ra,t7
+	move	a0,ta2
+	move	ra,ta3
 
 	j	outhexd
 	nop
@@ -1454,15 +1436,15 @@ outhexh:
 # output a hex byte from a0
 
 outhexb:
-	move	t7,ra
-	move	t6,a0
+	move	ta3,ra
+	move	ta2,a0
 
-	srl	a0,t6,4
+	srl	a0,ta2,4
 	jal	outhexd
 	nop
 
-	move	a0,t6
-	move	ra,t7
+	move	a0,ta2
+	move	ra,ta3
 
 # fall into outhexd
 
@@ -1484,23 +1466,15 @@ lt9:	addi	a0,a0,48
 
 # output a character in a0
 
-outch:	la      t0,UART_BASE
+outch:	LA      t0,UART_BASE
 
-#ifdef SIM
-
-	sb	a0,UART_DATA(t0)
-
-#else
-
-outch0:	lbu	t4,UART_LSR(t0)		# get line status
+outch0:	lbu	ta0,UART_LSR(t0)		# get line status
 	nop
-	andi	t4,t4,UART_LSR_TE	# check for transmitter empty
-	beqz	t4,outch0		# try again
+	andi	ta0,ta0,UART_LSR_TE	# check for transmitter empty
+	beqz	ta0,outch0		# try again
 	nop
 
 	sb	a0,UART_DATA(t0)	# write the character
-
-#endif
 
 	j	$31
 	nop
@@ -1514,8 +1488,8 @@ outch0:	lbu	t4,UART_LSR(t0)		# get line status
 getline:
 	move	s0,ra			# save return address
 
-	la	s1,inbuf		# init input buffer pointer
-	la	s2,inbufptr
+	LA	s1,inbuf		# init input buffer pointer
+	LA	s2,inbufptr
 	sw	s1,0(s2)
 
 gl0:	jal	inch			# get a character
@@ -1544,7 +1518,7 @@ gl0:	jal	inch			# get a character
 glcr:	j	s0			# return
 	nop
 
-glbs:	la	s2,inbuf		# if at beginning of buffer, do
+glbs:	LA	s2,inbuf		# if at beginning of buffer, do
 	beq	s1,s2,gl0		#   nothing
 	nop
 
@@ -1568,14 +1542,10 @@ glbs:	la	s2,inbuf		# if at beginning of buffer, do
 # check for interrupt from user, return non-zero in v0 if interrupt
 
 chk_intr:
-#ifdef SIM
-	li	v0,0			# no interrupt
-#else
-	la      t0,UART_BASE
+	LA      t0,UART_BASE
 	lbu     v0,UART_LSR(t0)         # Get Line status
 	nop
 	andi	v0,v0,UART_LSR_DR
-#endif
 	j	ra
 	nop
 
@@ -1583,26 +1553,7 @@ chk_intr:
 # get a character in v0
 # uses t0,t1
 
-#ifdef SIM
-
-inch:	la      t0,UART_BASE
-
-#if 0
-inch0:	lbu	t1,UART_SR(t0)         # Get Line status (should be lbu?)
-	nop
-	beqz	t1,inch0
-	nop
-#endif
-
-	lbu	v0,UART_DATA(t0)	# get character
-	nop
-
-	j	$31
-	nop
-
-#else
-
-inch:	la      t0,UART_BASE
+inch:	LA      t0,UART_BASE
 
 inch0:	lbu     t1,UART_LSR(t0)         # Get Line status
 	nop
@@ -1614,8 +1565,6 @@ inch0:	lbu     t1,UART_LSR(t0)         # Get Line status
 
 	j	$31
 	nop
-
-#endif
 
 
 banner:
@@ -1772,7 +1721,7 @@ tlb_miss:
 	mfc0	s4,C0_STATUS
 	mfc0	s5,C0_BADADDR
 
-	la	a0,tlb_miss_msg
+	LA	a0,tlb_miss_msg
 	jal	outstr
 	nop
 
@@ -1788,7 +1737,7 @@ x_tlb_miss:
 	mfc0	s4,C0_STATUS
 	mfc0	s5,C0_BADADDR
 
-	la	a0,x_tlb_miss_msg
+	LA	a0,x_tlb_miss_msg
 	jal	outstr
 	nop
 
@@ -1804,7 +1753,7 @@ cache_err:
 	mfc0	s4,C0_STATUS
 	mfc0	s5,C0_BADADDR
 
-	la	a0,cache_err_msg
+	LA	a0,cache_err_msg
 	jal	outstr
 	nop
 
@@ -1820,7 +1769,7 @@ gen_exc:
 	mfc0	s4,C0_STATUS
 	mfc0	s5,C0_BADADDR
 
-	la	a0,gen_exc_msg
+	LA	a0,gen_exc_msg
 	jal	outstr
 	nop
 
@@ -1829,32 +1778,32 @@ gen_exc:
 
 
 handle_exc:
-	la	a0,exc_msg0
+	LA	a0,exc_msg0
 	jal	outstr
 	nop
 
-	la	a0,exc_cause_msg
+	LA	a0,exc_cause_msg
 	jal	outstr
 	nop
 	move	a0,s3
 	jal	outhexw
 	nop
 
-	la	a0,exc_epc_msg
+	LA	a0,exc_epc_msg
 	jal	outstr
 	nop
 	move	a0,s1
 	jal	outhexw
 	nop
 
-	la	a0,exc_stat_msg
+	LA	a0,exc_stat_msg
 	jal	outstr
 	nop
 	move	a0,s4
 	jal	outhexw
 	nop
 
-	la	a0,exc_badaddr_msg
+	LA	a0,exc_badaddr_msg
 	jal	outstr
 	nop
 	move	a0,s5
@@ -1862,14 +1811,14 @@ handle_exc:
 	nop
 
 #if 0
-	la	a0,exc_ctx_msg
+	LA	a0,exc_ctx_msg
 	jal	outstr
 	nop
 	move	a0,s2
 	jal	outhexw
 	nop
 
-	la	a0,exc_xctx_msg
+	LA	a0,exc_xctx_msg
 	jal	outstr
 	nop
 	move	a0,s0
@@ -1877,7 +1826,7 @@ handle_exc:
 	nop
 #endif
 
-	la	a0,exc_msg9
+	LA	a0,exc_msg9
 	jal	outstr
 	nop
 
@@ -1885,9 +1834,9 @@ handle_exc:
 	nop
 
 reg_cpu_isr:
-unred_cpu_isr:
+unreg_cpu_isr:
 reg_ic_isr:
-unred_ic_isr:
+unreg_ic_isr:
 reg_esr:
 unreg_esr:
 flush_cache:
@@ -1896,11 +1845,11 @@ syscon_read:
 ret:	li	v0,0
 	j	ra
 
-print:	move	t7,ra
-	move	t6,a1
+print:	move	ta3,ra
+	move	ta2,a1
 
-print0:	lbu	a0,0(t6)		# get byte
-	addi	t6,t6,1
+print0:	lbu	a0,0(ta2)		# get byte
+	addi	ta2,ta2,1
 
 	beqz	a0,print9
 	nop
@@ -1911,20 +1860,20 @@ print0:	lbu	a0,0(t6)		# get byte
         j	print0
         nop
 
-print9:	j	t7
+print9:	j	ta3
 	nop
 
 print_count:
-	move	t7,ra
-	move	t6,a1
+	move	ta3,ra
+	move	ta2,a1
 	move	t8,a2			# count
 
-prc0:	lbu	a0,0(t6)		# get byte
+prc0:	lbu	a0,0(ta2)		# get byte
 	jal	outch
 	nop
-	addi	t6,t6,1
+	addi	ta2,ta2,1
 	addi	t8,t8,-1
 	bnez	t8,prc0
 	nop
 
-	j	t7
+	j	ta3

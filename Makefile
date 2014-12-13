@@ -17,32 +17,48 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 
-BASE=/export/tools/bin
-#
-CC=$(BASE)/mipsel-linux-gcc
-LD=$(BASE)/mipsel-linux-ld
-CONV=$(BASE)/mipsel-linux-conv
-DUMP=$(BASE)/mipsel-linux-objdump
-OBJCOPY=$(BASE)/mipsel-linux-objcopy
+ifeq ($(MMON64),1)
+PREFIX=mips64el-unknown-linux-gnu
+CFLAGS_ARCH=-mips64 -mabi=64
+LD_SCRIPT=mips64.ldscript
+MMON_TEXT_ADDR=0xffffffffbfc00000
+MMON_DATA_ADDR=0xffffffffa0000010
+RESET_TEXT_ADDR=0xffffffff80008000
+else
+PREFIX=mipsel-unknown-linux-gnu
+CFLAGS_ARCH=-mips32 -mabi=32
+LD_SCRIPT=mips.ldscript
+MMON_TEXT_ADDR=0xbfc00000
+MMON_DATA_ADDR=0xa0000010
+RESET_TEXT_ADDR=0x80008000
+endif
+
+CC=$(PREFIX)-gcc
+LD=$(PREFIX)-ld
+CONV=$(PREFIX)-conv
+DUMP=$(PREFIX)-objdump
+OBJCOPY=$(PREFIX)-objcopy
 
 # for real hardware
-CFLAGS=-G 0 -mips32 -DR4000 -nostdinc -fno-pic -mno-abicalls -Wall
-#LDFLAGS=-n  -Ttext bfc00000 -Tdata a0000010
-LDFLAGS=-G 0 --script=stand.ldscript \
+CFLAGS=-G 0 $(CFLAGS_ARCH) -nostdinc -fno-pic -mno-abicalls -Wall
+# Note - on our target hardware, the same DRAM is aliased between a0000000 and
+#        bfc00000.  Data section starts at a0000010 to allow room for the
+#        four instructions of the reset exception handler.  Data section must
+#        end before a0000200, so size of data section must be <= 496 bytes
+MMON_LDFLAGS=-G 0 --script=$(LD_SCRIPT) \
 	--entry=reset_exception \
 	--omagic \
 	--discard-all \
 	--strip-all \
 	-Map mmon.map \
-	-Ttext bfc00000 -Tdata a0000010
-# Note - on our target hardware, the same DRAM is aliased between a0000000 and
-#        bfc00000.  Data section starts at a0000010 to allow room for the
-#        four instructions of the reset exception handler.  Data section must
-#        end before a0000200, so size of data section must be <= 496 bytes
-
-# for simulator
-#CFLAGS=-EB -G 0 -mcpu=r4k -mips3 -DR4000 -nostdinc -DSIM
-#LDFLAGS= -Ttext 9fc00000 -Tdata 80000000
+	-Ttext $(MMON_TEXT_ADDR) -Tdata $(MMON_DATA_ADDR)
+RESET_LDFLAGS=-G 0 --script=$(LD_SCRIPT) \
+	--entry=start \
+	--omagic \
+	--discard-all \
+	--strip-all \
+	-Map mmon.map \
+	-Ttext $(RESET_TEXT_ADDR)
 
 IMA=-vp  -f sbin
 SRC=-vp  -f srec
@@ -68,18 +84,13 @@ floppy:	README $(PROTSRECS)
 .PHONY:	floppy
 
 mmon:	main.o
-#	$(LD) -o mmon.elf -G 0 --script=stand.ldscript --entry=reset_exception --omagic -Ttext 0x80008000 -Tdata 80000010  main.o
-	$(LD) -o mmon $(LDFLAGS) main.o
+	$(LD) -o mmon $(MMON_LDFLAGS) main.o
 
 bios:	mmon	
 	$(OBJCOPY) -S -j .text --output-target binary mmon mipsel_bios.bin
-#       make 128K binary
-#	dd if=/dev/zero of=empty.bin bs=1024 count=128
-#	cat mmon.bin empty.bin >m.bin
-#	dd if=m.bin of=mips_bios.bin bs=1024 count=128
 
 reset:	reset.o
-	$(LD) -o reset -G 0 --script=stand.ldscript  --omagic --discard-all --strip-all --entry=start -Ttext 80008000 reset.o 
+	$(LD) -o reset $(RESET_LDFLAGS) reset.o
 
 %.sr:	%
 	$(CONV) $(SRC) -o $@ $*

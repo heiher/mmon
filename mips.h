@@ -19,6 +19,11 @@
    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#if defined(__mips64)
+#define LA	dla
+#else
+#define LA	la
+#endif
 
 #define K0BASE          0x80000000
 #define K0SIZE          0x20000000
@@ -42,6 +47,20 @@
 #define a1              $5
 #define a2              $6
 #define a3              $7
+#if defined(__mips64)
+#define a4              $8              /* arguments */
+#define a5              $9
+#define a6              $10
+#define a7              $11
+#define t0              $12
+#define t1              $13
+#define t2              $14
+#define t3              $15
+#define ta0             a4
+#define ta1             a5
+#define ta2             a6
+#define ta3             a7
+#else
 #define t0              $8              /* temporaries */
 #define t1              $9
 #define t2              $10
@@ -50,6 +69,11 @@
 #define t5              $13
 #define t6              $14
 #define t7              $15
+#define ta0             t4
+#define ta1             t5
+#define ta2             t6
+#define ta3             t7
+#endif
 #define s0              $16             /* saved registers */
 #define s1              $17
 #define s2              $18

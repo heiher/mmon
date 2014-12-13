@@ -1,21 +1,23 @@
 #include "mips.h"
+#include "yamon.h"
+
 	.text
 	.globl	start
 start:
 	li	a0,0			# test YAMON API
-	la	a1,print
-	lw	t9,0xbfc00534
+	LA	a1,print
+	lw	t9,YAMON_PRINT
 	jal	t9
 	nop
 
 	li	a0,0
-	la	a1,prc
+	LA	a1,prc
 	li	a2,24
-	lw	t9,0xbfc00504
+	lw	t9,YAMON_PRINT_COUNT
 	jal	t9
 	nop
 
-	li	t9, 0xbfc00000
+	li	t9,YAMON_START
 	jr	t9
 
 	
